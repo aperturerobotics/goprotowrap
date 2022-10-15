@@ -1,35 +1,33 @@
 # goprotowrap
 
-⚠️ **The Go plugin for `protoc` got smarter: you should no longer need this**
+⚠️ **This is a maintenance fork of the [original repository] which is archived.**
+
+[original repository]: https://github.com/square/goprotowrap
 
 A package-at-a-time wrapper for protoc, for generating Go protobuf
 code.
 
-[![Build Status](https://travis-ci.org/square/goprotowrap.svg?branch=master)](https://travis-ci.org/square/goprotowrap)
+It is used in the [aperturerobotics/protobuf-project] template Makefile.
 
-`protowrap` is a small tool we found helpful when working with
-[protocol buffers](https://developers.google.com/protocol-buffers/) in
-Go at Square. We're publishing it in the hope that others find it
-useful too. Contributions are welcome.
+[aperturerobotics/protobuf-project]: https://github.com/aperturerobotics/protobuf-project/blob/995c779/Makefile#L76
+
+`protowrap` is a small tool built by Square for compiling [Protobuf].
+
+[Protobuf]: https://developers.google.com/protocol-buffers/
 
 ## Install
 
 ```shell
-go get -u github.com/square/goprotowrap/cmd/protowrap
+go get -u github.com/aperturerobotics/goprotowrap/cmd/protowrap
 ```
 
 ## Philosophy
 
-Unlike other language plugins, the Go
-[protobuf plugin](https://github.com/golang/protobuf) expects to be
-called separately for each package, ~and given all files in that
-package~ (fixed).
+`protowrap` is called instead of `protoc`, and ensures that `.proto` files are
+processed one Go package at a time.
 
-`protowrap` is called instead of `protoc`, and ensures that `.proto`
-files are processed one Go package at a time.
-
-It parses out the flags it understands, passing the rest through to
-`protoc` unchanged.
+It parses out the flags it understands, passing the rest through to `protoc`
+unchanged.
 
 ## Operation
 
@@ -39,16 +37,6 @@ It parses out the flags it understands, passing the rest through to
 - inspect the FileDescriptorProtos to deduce package information
 - group `.proto` files into packages
 - call `protoc` once for each package
-
-## TODOs
-
-- [x] Replace square-specific handling of `go_package` with
-      recently updated upstream logic.
-- [ ] In the initial call to `protoc` for generating
-      FileDescriptorProtos, pass `.proto` files to `protoc` in batches
-      instead of all at once.
-- [ ] Better tests, especially of the code paths not exercised by our
-      build process.
 
 ## License
 
@@ -65,5 +53,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 implied. See the License for the specific language governing
 permissions and limitations under the License.
-
-

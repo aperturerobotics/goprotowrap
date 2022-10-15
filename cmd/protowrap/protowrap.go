@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/square/goprotowrap"
-	"github.com/square/goprotowrap/wrapper"
+	"github.com/aperturerobotics/goprotowrap"
+	"github.com/aperturerobotics/goprotowrap/wrapper"
 )
 
 // customFlags is a map describing flags we add to protoc. true means

@@ -135,8 +135,8 @@ func GetFileInfos(importPaths []string, protos []string, protocCommand string) (
 	for _, importPath := range importPaths {
 		args = append(args, "-I", importPath)
 	}
-	args = append(args, "--descriptor_set_out="+descriptorFilename)
 
+	args = append(args, "--descriptor_set_out="+descriptorFilename)
 	args = append(args, "--include_imports")
 
 	if len(protos) <= 1000 {
