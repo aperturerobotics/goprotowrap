@@ -20,8 +20,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
-	"github.com/aperturerobotics/goprotowrap"
 	"github.com/aperturerobotics/goprotowrap/wrapper"
 )
 
@@ -64,7 +64,12 @@ func main() {
 		usageAndExit("Error: %v\n", err)
 	}
 	if flags.Has("version") {
-		fmt.Println(goprotowrap.Version)
+		buildInfo, ok := debug.ReadBuildInfo()
+		if !ok {
+			fmt.Println("version unknown")
+		} else {
+			fmt.Print(buildInfo.String())
+		}
 		os.Exit(0)
 	}
 	if len(importDirs) == 0 {
