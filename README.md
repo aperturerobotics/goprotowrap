@@ -40,6 +40,7 @@ unchanged.
 
 ## License
 
+Copyright 2018-2025 Aperture Robotics, LLC.
 Copyright 2016 Square, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you
