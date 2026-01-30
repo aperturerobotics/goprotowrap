@@ -34,6 +34,10 @@ var customFlags = map[string]bool{
 	"only_specified_files": false,
 	"print_only":           false,
 	"version":              false,
+	"cache_file":           true,
+	"force":                false,
+	"cache_verbose":        false,
+	"tool_versions":        true,
 }
 
 func usageAndExit(format string, args ...interface{}) {
@@ -51,6 +55,14 @@ func usageAndExit(format string, args ...interface{}) {
       if true, print protoc commandlines instead of generating protos
   --version
       print version and exit
+  --cache_file string
+      path to cache manifest file for incremental generation
+  --force
+      force regeneration of all packages, ignoring cache
+  --cache_verbose
+      print cache hit/miss information
+  --tool_versions string
+      comma-separated tool versions for cache (e.g. "protoc=3.0,starpc=v1.0")
   @file
       read command line arguments from the named file. Each line of the file
       will become a single argument at the position where @file is used.
@@ -92,6 +104,14 @@ func main() {
 	if err != nil {
 		usageAndExit("Error: %v\n", err)
 	}
+	forceRegen, err := flags.Bool("force", false)
+	if err != nil {
+		usageAndExit("Error: %v\n", err)
+	}
+	cacheVerbose, err := flags.Bool("cache_verbose", false)
+	if err != nil {
+		usageAndExit("Error: %v\n", err)
+	}
 
 	w := &wrapper.Wrapper{
 		ProtocCommand: flags.String("protoc_command", "protoc"),
@@ -101,6 +121,10 @@ func main() {
 		NoExpand:      noExpand,
 		Parallelism:   parallelism,
 		PrintOnly:     printOnly,
+		CacheFile:     flags.String("cache_file", ""),
+		ForceRegen:    forceRegen,
+		CacheVerbose:  cacheVerbose,
+		ToolVersions:  flags.String("tool_versions", ""),
 	}
 	err = w.Init()
 	if err != nil {

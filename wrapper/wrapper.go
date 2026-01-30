@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // defaultProtocCommand is the default command used to call protoc.
@@ -39,6 +40,12 @@ type Wrapper struct {
 	NoExpand      bool     // If true, don't search for other protos in import directories.
 	PrintOnly     bool     // If true, don't generate: just print the protoc commandlines that would be called.
 
+	// Cache-related fields
+	CacheFile    string // Path to cache manifest file.
+	ForceRegen   bool   // Force regeneration of all packages.
+	CacheVerbose bool   // Print cache hit/miss information.
+	ToolVersions string // Tool versions string for cache invalidation.
+
 	allProtos   []string                // All proto files: those specified, plus those found alongside them.
 	infos       map[string]*FileInfo    // A map of filename to FileInfo struct for all proto files we care about in this run.
 	packages    map[string]*PackageInfo // A list of PackageInfo structs for packages containing files we care about.
@@ -48,6 +55,10 @@ type Wrapper struct {
 
 	// Used internally for checking for cycles and topologically sorting
 	sccs [][]*PackageInfo // Slice of strongly-connected components in the package graph.
+
+	// Cache state
+	cache    *Cache            // Loaded cache data.
+	hashMemo map[string]string // Memoized package hashes.
 }
 
 // Init must be called before any of the methods that do anything.
@@ -196,7 +207,33 @@ func (w *Wrapper) Generate() error {
 	if w.Parallelism < 1 {
 		return fmt.Errorf("parallelism cannot be < 1; got %d", w.Parallelism)
 	}
-	parallelism := len(w.packages)
+
+	// Initialize cache state
+	w.hashMemo = make(map[string]string)
+
+	// Load cache if enabled
+	if w.CacheFile != "" && !w.ForceRegen {
+		var err error
+		w.cache, err = LoadCache(w.CacheFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load cache: %v\n", err)
+			w.cache = NewCache()
+		}
+	} else {
+		w.cache = NewCache()
+	}
+
+	// Filter packages needing regeneration
+	packagesToGen := w.filterPackagesNeedingRegen()
+
+	if len(packagesToGen) == 0 {
+		if w.CacheVerbose {
+			fmt.Println("All packages up to date, nothing to generate")
+		}
+		return nil
+	}
+
+	parallelism := len(packagesToGen)
 	if w.Parallelism < parallelism {
 		parallelism = w.Parallelism
 	}
@@ -220,7 +257,7 @@ func (w *Wrapper) Generate() error {
 
 	var err error
 OUTER:
-	for _, pkg := range w.packagesInOrder() {
+	for _, pkg := range packagesToGen {
 		select {
 		case pkgChan <- pkg:
 		case err = <-errChan:
@@ -233,8 +270,98 @@ OUTER:
 	case err = <-errChan:
 	default:
 	}
+
+	// Update and save cache after successful generation
+	if err == nil && w.CacheFile != "" {
+		w.updateCache(packagesToGen)
+		if saveErr := w.cache.Save(w.CacheFile); saveErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", saveErr)
+		}
+	}
+
 	return err
 }
+
+// filterPackagesNeedingRegen returns packages that need regeneration.
+func (w *Wrapper) filterPackagesNeedingRegen() []*PackageInfo {
+	allPkgs := w.packagesInOrder()
+
+	if w.ForceRegen || w.cache == nil {
+		if w.CacheVerbose && w.ForceRegen {
+			fmt.Println("Force regeneration requested")
+		}
+		return allPkgs
+	}
+
+	// Check if protoc flags changed
+	currentFlagsHash := w.hashProtocFlags()
+	if w.cache.ProtocFlagsHash != "" && w.cache.ProtocFlagsHash != currentFlagsHash {
+		if w.CacheVerbose {
+			fmt.Println("Protoc flags changed, regenerating all packages")
+		}
+		return allPkgs
+	}
+
+	var needsRegen []*PackageInfo
+	for _, pkg := range allPkgs {
+		hash := w.computePackageHash(pkg)
+		cached, exists := w.cache.Packages[pkg.ComputedPackage]
+
+		if !exists {
+			if w.CacheVerbose {
+				fmt.Printf("Generating %s (not in cache)\n", pkg.ComputedPackage)
+			}
+			needsRegen = append(needsRegen, pkg)
+			continue
+		}
+
+		if cached.Hash != hash {
+			if w.CacheVerbose {
+				fmt.Printf("Generating %s (hash changed)\n", pkg.ComputedPackage)
+			}
+			needsRegen = append(needsRegen, pkg)
+			continue
+		}
+
+		// Check if expected output files exist
+		if !w.allOutputFilesExist(pkg, cached.GeneratedFiles) {
+			if w.CacheVerbose {
+				fmt.Printf("Generating %s (output files missing)\n", pkg.ComputedPackage)
+			}
+			needsRegen = append(needsRegen, pkg)
+			continue
+		}
+
+		if w.CacheVerbose {
+			fmt.Printf("Skipping %s (cached)\n", pkg.ComputedPackage)
+		}
+	}
+
+	return needsRegen
+}
+
+// updateCache updates the cache with newly generated packages.
+func (w *Wrapper) updateCache(generatedPkgs []*PackageInfo) {
+	w.cache.Version = CacheVersion
+	w.cache.ProtocFlagsHash = w.hashProtocFlags()
+
+	for _, pkg := range generatedPkgs {
+		protoFiles := make([]string, 0, len(pkg.Files))
+		for _, fi := range pkg.Files {
+			protoFiles = append(protoFiles, fi.Name)
+		}
+
+		w.cache.Packages[pkg.ComputedPackage] = &PackageCache{
+			Hash:           w.computePackageHash(pkg),
+			GeneratedFiles: w.expectedOutputFiles(pkg),
+			ProtoFiles:     protoFiles,
+			LastGenerated:  timeNow(),
+		}
+	}
+}
+
+// timeNow is a variable for testing purposes.
+var timeNow = time.Now
 
 // packagesInOrder returns the list of packages, sorted by name.
 func (w *Wrapper) packagesInOrder() []*PackageInfo {
