@@ -40,7 +40,7 @@ var customFlags = map[string]bool{
 	"tool_versions":        true,
 }
 
-func usageAndExit(format string, args ...interface{}) {
+func usageAndExit(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	fmt.Fprintf(os.Stderr, "Usage: %s [flags] [protofiles]\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, `  --only_specified_files true|false

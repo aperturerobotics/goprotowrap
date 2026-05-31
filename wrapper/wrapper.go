@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -233,10 +233,7 @@ func (w *Wrapper) Generate() error {
 		return nil
 	}
 
-	parallelism := len(packagesToGen)
-	if w.Parallelism < parallelism {
-		parallelism = w.Parallelism
-	}
+	parallelism := min(w.Parallelism, len(packagesToGen))
 
 	pkgChan := make(chan *PackageInfo)
 
@@ -370,7 +367,7 @@ func (w *Wrapper) packagesInOrder() []*PackageInfo {
 	for name := range w.packages {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		result = append(result, w.packages[name])
 	}
@@ -384,7 +381,7 @@ func (w *Wrapper) allPackagesInOrder() []*PackageInfo {
 	for name := range w.allPackages {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		result = append(result, w.allPackages[name])
 	}
